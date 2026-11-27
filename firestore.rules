@@ -1,0 +1,596 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Core Security Primitives
+    // -------------------------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedOwner() {
+      return isVerifiedUser() &&
+        request.auth.token.email is string &&
+        request.auth.token.email.lower() in ['david.qc.op@gmail.com', 'amico.official22@gmail.com'];
+    }
+
+    function isSecondaryOwner() {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/business_settings/operations) &&
+        get(/databases/$(database)/documents/business_settings/operations).data.secondaryOwnerEmail is string &&
+        get(/databases/$(database)/documents/business_settings/operations).data.secondaryOwnerEmail != '' &&
+        get(/databases/$(database)/documents/business_settings/operations).data.secondaryOwnerEmail == request.auth.token.email;
+    }
+
+    function isAdmin() {
+      return isBootstrappedOwner() || isSecondaryOwner();
+    }
+
+    function hasValidCreateTimestamps(data) {
+      return data.createdAt == request.time && data.updatedAt == request.time;
+    }
+
+    function hasValidUpdateTimestamps(data) {
+      return data.createdAt == existing().createdAt && data.updatedAt == request.time;
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isStringList(val, maxItems, maxItemLen) {
+      return val is list &&
+        val.size() <= maxItems &&
+        (val.size() == 0 || (val[0] is string && val[0].size() <= maxItemLen));
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Blueprints
+    // -------------------------------------------------------------------------
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'isActive', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'isActive', 'photoUrl', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 150 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        data.role == 'owner' &&
+        data.isActive is bool &&
+        isOptionalString(data, 'photoUrl', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStorefrontSettings(data) {
+      return data.keys().hasAll(['businessName', 'whatsappNumber', 'defaultCurrency', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['businessName', 'tagline', 'logoUrl', 'whatsappNumber', 'instagramHandle', 'address', 'contactEmail', 'contactHours', 'defaultCurrency', 'createdAt', 'updatedAt']) &&
+        data.businessName is string && data.businessName.size() >= 2 && data.businessName.size() <= 120 &&
+        isOptionalString(data, 'tagline', 200) &&
+        isOptionalString(data, 'logoUrl', 500) &&
+        data.whatsappNumber is string && data.whatsappNumber.size() >= 8 && data.whatsappNumber.size() <= 25 &&
+        isOptionalString(data, 'instagramHandle', 60) &&
+        isOptionalString(data, 'address', 300) &&
+        isOptionalString(data, 'contactEmail', 150) &&
+        isOptionalString(data, 'contactHours', 120) &&
+        data.defaultCurrency == 'IDR' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidOperationsSettings(data) {
+      return data.keys().hasAll(['primaryOwnerEmail', 'defaultQuotationValidityDays', 'inquiryNumberFormat', 'quotationNumberFormat', 'salesOrderNumberFormat', 'purchaseOrderNumberFormat', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['primaryOwnerEmail', 'secondaryOwnerEmail', 'defaultQuotationValidityDays', 'inquiryNumberFormat', 'quotationNumberFormat', 'salesOrderNumberFormat', 'purchaseOrderNumberFormat', 'createdAt', 'updatedAt']) &&
+        data.primaryOwnerEmail is string && data.primaryOwnerEmail.size() >= 5 && data.primaryOwnerEmail.size() <= 150 &&
+        isOptionalString(data, 'secondaryOwnerEmail', 150) &&
+        data.defaultQuotationValidityDays is int && data.defaultQuotationValidityDays >= 1 && data.defaultQuotationValidityDays <= 365 &&
+        data.inquiryNumberFormat is string && data.inquiryNumberFormat.size() >= 2 && data.inquiryNumberFormat.size() <= 40 &&
+        data.quotationNumberFormat is string && data.quotationNumberFormat.size() >= 2 && data.quotationNumberFormat.size() <= 40 &&
+        data.salesOrderNumberFormat is string && data.salesOrderNumberFormat.size() >= 2 && data.salesOrderNumberFormat.size() <= 40 &&
+        data.purchaseOrderNumberFormat is string && data.purchaseOrderNumberFormat.size() >= 2 && data.purchaseOrderNumberFormat.size() <= 40 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCatalogCategory(data) {
+      return data.keys().hasAll(['slug', 'name', 'sortOrder', 'isActive', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['slug', 'name', 'description', 'imageUrl', 'sortOrder', 'isActive', 'createdAt', 'updatedAt']) &&
+        data.slug is string && data.slug.size() >= 2 && data.slug.size() <= 64 && data.slug.matches('^[a-z0-9\\-]+$') &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+        isOptionalString(data, 'description', 300) &&
+        isOptionalString(data, 'imageUrl', 500) &&
+        data.sortOrder is int && data.sortOrder >= 0 && data.sortOrder <= 1000 &&
+        data.isActive is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['productCode', 'name', 'categoryId', 'categoryName', 'photos', 'description', 'minimumOrderQty', 'startingPrice', 'estimatedLeadTimeDays', 'isFeatured', 'isPublished', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['productCode', 'name', 'categoryId', 'categoryName', 'photos', 'description', 'specifications', 'availableColors', 'availableSizes', 'customizationOptions', 'minimumOrderQty', 'startingPrice', 'estimatedLeadTimeDays', 'isFeatured', 'isPublished', 'createdAt', 'updatedAt']) &&
+        data.productCode is string && data.productCode.size() >= 2 && data.productCode.size() <= 40 && data.productCode.matches('^[A-Z0-9\\-]+$') &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 140 &&
+        isValidId(data.categoryId) &&
+        data.categoryName is string && data.categoryName.size() >= 2 && data.categoryName.size() <= 80 &&
+        isStringList(data.photos, 10, 500) &&
+        data.description is string && data.description.size() <= 2000 &&
+        isOptionalString(data, 'specifications', 1000) &&
+        (!('availableColors' in data) || isStringList(data.availableColors, 20, 60)) &&
+        (!('availableSizes' in data) || isStringList(data.availableSizes, 20, 60)) &&
+        (!('customizationOptions' in data) || isStringList(data.customizationOptions, 20, 120)) &&
+        data.minimumOrderQty is int && data.minimumOrderQty >= 1 && data.minimumOrderQty <= 100000 &&
+        (data.startingPrice is int || data.startingPrice is float) && data.startingPrice >= 0 &&
+        data.estimatedLeadTimeDays is int && data.estimatedLeadTimeDays >= 1 && data.estimatedLeadTimeDays <= 365 &&
+        data.isFeatured is bool &&
+        data.isPublished is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['name', 'whatsappNumber', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['name', 'whatsappNumber', 'email', 'companyOrEventName', 'city', 'notes', 'createdAt', 'updatedAt']) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 120 &&
+        data.whatsappNumber is string && data.whatsappNumber.size() >= 8 && data.whatsappNumber.size() <= 25 &&
+        isOptionalString(data, 'email', 150) &&
+        isOptionalString(data, 'companyOrEventName', 150) &&
+        isOptionalString(data, 'city', 80) &&
+        isOptionalString(data, 'notes', 1000) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll(['supplierCode', 'name', 'phone', 'isActive', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['supplierCode', 'name', 'contactPerson', 'phone', 'city', 'specialty', 'isActive', 'notes', 'createdAt', 'updatedAt']) &&
+        data.supplierCode is string && data.supplierCode.size() >= 2 && data.supplierCode.size() <= 40 &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 140 &&
+        isOptionalString(data, 'contactPerson', 100) &&
+        data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 25 &&
+        isOptionalString(data, 'city', 80) &&
+        isOptionalString(data, 'specialty', 200) &&
+        data.isActive is bool &&
+        isOptionalString(data, 'notes', 1000) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSupplierProduct(data) {
+      return data.keys().hasAll(['supplierId', 'productId', 'baseCostPrice', 'minOrderQty', 'leadTimeDays', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['supplierId', 'productId', 'supplierSku', 'baseCostPrice', 'printingCostPerUnit', 'minOrderQty', 'leadTimeDays', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidId(data.supplierId) &&
+        isValidId(data.productId) &&
+        isOptionalString(data, 'supplierSku', 60) &&
+        (data.baseCostPrice is int || data.baseCostPrice is float) && data.baseCostPrice >= 0 &&
+        (!('printingCostPerUnit' in data) || ((data.printingCostPerUnit is int || data.printingCostPerUnit is float) && data.printingCostPerUnit >= 0)) &&
+        data.minOrderQty is int && data.minOrderQty >= 1 &&
+        data.leadTimeDays is int && data.leadTimeDays >= 1 &&
+        isOptionalString(data, 'notes', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidInquiry(data) {
+      return data.keys().hasAll(['inquiryNumber', 'customerName', 'whatsappNumber', 'eventType', 'eventDate', 'status', 'itemCount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['inquiryNumber', 'customerName', 'whatsappNumber', 'eventType', 'eventDate', 'notes', 'status', 'itemCount', 'customerId', 'createdAt', 'updatedAt']) &&
+        data.inquiryNumber is string && data.inquiryNumber.size() >= 5 && data.inquiryNumber.size() <= 40 && data.inquiryNumber.matches('^[A-Z0-9\\-]+$') &&
+        data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 120 &&
+        data.whatsappNumber is string && data.whatsappNumber.size() >= 8 && data.whatsappNumber.size() <= 25 &&
+        data.eventType is string && data.eventType.size() >= 2 && data.eventType.size() <= 80 &&
+        data.eventDate is string && data.eventDate.size() >= 8 && data.eventDate.size() <= 20 &&
+        isOptionalString(data, 'notes', 1500) &&
+        data.status in ['NEW', 'REVIEWED', 'QUOTED', 'CONVERTED', 'CLOSED'] &&
+        data.itemCount is int && data.itemCount >= 1 && data.itemCount <= 50 &&
+        (!('customerId' in data) || isValidId(data.customerId)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidInquiryItem(data) {
+      return data.keys().hasAll(['inquiryId', 'productId', 'productCode', 'productName', 'quantity', 'indicativeUnitPrice', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['inquiryId', 'productId', 'productCode', 'productName', 'quantity', 'selectedColor', 'selectedSize', 'customizationDetails', 'artworkReferenceUrl', 'indicativeUnitPrice', 'createdAt', 'updatedAt']) &&
+        isValidId(data.inquiryId) &&
+        isValidId(data.productId) &&
+        data.productCode is string && data.productCode.size() >= 2 && data.productCode.size() <= 40 &&
+        data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 140 &&
+        data.quantity is int && data.quantity >= 1 && data.quantity <= 1000000 &&
+        isOptionalString(data, 'selectedColor', 60) &&
+        isOptionalString(data, 'selectedSize', 60) &&
+        isOptionalString(data, 'customizationDetails', 1000) &&
+        isOptionalString(data, 'artworkReferenceUrl', 500) &&
+        (data.indicativeUnitPrice is int || data.indicativeUnitPrice is float) && data.indicativeUnitPrice >= 0 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidQuotation(data) {
+      return data.keys().hasAll(['quotationNumber', 'customerId', 'customerName', 'status', 'validUntil', 'subtotal', 'totalAmount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['quotationNumber', 'inquiryId', 'customerId', 'customerName', 'status', 'validUntil', 'subtotal', 'discountAmount', 'totalAmount', 'notes', 'createdAt', 'updatedAt']) &&
+        data.quotationNumber is string && data.quotationNumber.size() >= 5 && data.quotationNumber.size() <= 40 &&
+        (!('inquiryId' in data) || isValidId(data.inquiryId)) &&
+        isValidId(data.customerId) &&
+        data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 120 &&
+        data.status in ['DRAFT', 'SENT', 'APPROVED', 'REJECTED', 'EXPIRED'] &&
+        data.validUntil is string && data.validUntil.size() >= 8 && data.validUntil.size() <= 25 &&
+        (data.subtotal is int || data.subtotal is float) && data.subtotal >= 0 &&
+        (!('discountAmount' in data) || ((data.discountAmount is int || data.discountAmount is float) && data.discountAmount >= 0)) &&
+        (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0 &&
+        isOptionalString(data, 'notes', 1500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidQuotationItem(data) {
+      return data.keys().hasAll(['quotationId', 'productId', 'productName', 'quantity', 'unitPrice', 'lineTotal', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['quotationId', 'productId', 'productName', 'quantity', 'unitPrice', 'lineTotal', 'customizationSummary', 'createdAt', 'updatedAt']) &&
+        isValidId(data.quotationId) &&
+        isValidId(data.productId) &&
+        data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 140 &&
+        data.quantity is int && data.quantity >= 1 &&
+        (data.unitPrice is int || data.unitPrice is float) && data.unitPrice >= 0 &&
+        (data.lineTotal is int || data.lineTotal is float) && data.lineTotal >= 0 &&
+        isOptionalString(data, 'customizationSummary', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSalesOrder(data) {
+      return data.keys().hasAll(['orderNumber', 'customerId', 'customerName', 'status', 'totalAmount', 'paidAmount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['orderNumber', 'quotationId', 'customerId', 'customerName', 'eventDate', 'deliveryDeadline', 'status', 'totalAmount', 'paidAmount', 'notes', 'createdAt', 'updatedAt']) &&
+        data.orderNumber is string && data.orderNumber.size() >= 5 && data.orderNumber.size() <= 40 &&
+        (!('quotationId' in data) || isValidId(data.quotationId)) &&
+        isValidId(data.customerId) &&
+        data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 120 &&
+        isOptionalString(data, 'eventDate', 25) &&
+        isOptionalString(data, 'deliveryDeadline', 25) &&
+        data.status in ['CONFIRMED', 'IN_PRODUCTION', 'QC_PENDING', 'READY_TO_SHIP', 'DELIVERED', 'CANCELLED'] &&
+        (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0 &&
+        (data.paidAmount is int || data.paidAmount is float) && data.paidAmount >= 0 &&
+        isOptionalString(data, 'notes', 1500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSalesOrderItem(data) {
+      return data.keys().hasAll(['salesOrderId', 'productId', 'productName', 'quantity', 'unitSellingPrice', 'lineTotal', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['salesOrderId', 'productId', 'productName', 'quantity', 'unitSellingPrice', 'lineTotal', 'customizationSummary', 'createdAt', 'updatedAt']) &&
+        isValidId(data.salesOrderId) &&
+        isValidId(data.productId) &&
+        data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 140 &&
+        data.quantity is int && data.quantity >= 1 &&
+        (data.unitSellingPrice is int || data.unitSellingPrice is float) && data.unitSellingPrice >= 0 &&
+        (data.lineTotal is int || data.lineTotal is float) && data.lineTotal >= 0 &&
+        isOptionalString(data, 'customizationSummary', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPurchaseOrder(data) {
+      return data.keys().hasAll(['poNumber', 'salesOrderId', 'supplierId', 'supplierName', 'status', 'totalAmount', 'paidAmount', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['poNumber', 'salesOrderId', 'supplierId', 'supplierName', 'status', 'totalAmount', 'paidAmount', 'expectedCompletionDate', 'createdAt', 'updatedAt']) &&
+        data.poNumber is string && data.poNumber.size() >= 5 && data.poNumber.size() <= 40 &&
+        isValidId(data.salesOrderId) &&
+        isValidId(data.supplierId) &&
+        data.supplierName is string && data.supplierName.size() >= 2 && data.supplierName.size() <= 140 &&
+        data.status in ['DRAFT', 'ORDERED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'] &&
+        (data.totalAmount is int || data.totalAmount is float) && data.totalAmount >= 0 &&
+        (data.paidAmount is int || data.paidAmount is float) && data.paidAmount >= 0 &&
+        isOptionalString(data, 'expectedCompletionDate', 25) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPurchaseOrderItem(data) {
+      return data.keys().hasAll(['purchaseOrderId', 'productId', 'productName', 'quantity', 'unitPurchasePrice', 'lineTotal', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['purchaseOrderId', 'productId', 'productName', 'quantity', 'unitPurchasePrice', 'lineTotal', 'createdAt', 'updatedAt']) &&
+        isValidId(data.purchaseOrderId) &&
+        isValidId(data.productId) &&
+        data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 140 &&
+        data.quantity is int && data.quantity >= 1 &&
+        (data.unitPurchasePrice is int || data.unitPurchasePrice is float) && data.unitPurchasePrice >= 0 &&
+        (data.lineTotal is int || data.lineTotal is float) && data.lineTotal >= 0 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomerPayment(data) {
+      return data.keys().hasAll(['salesOrderId', 'customerId', 'amount', 'paymentMethod', 'paymentDate', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['salesOrderId', 'customerId', 'amount', 'paymentMethod', 'paymentDate', 'referenceNumber', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidId(data.salesOrderId) &&
+        isValidId(data.customerId) &&
+        (data.amount is int || data.amount is float) && data.amount >= 0 &&
+        data.paymentMethod is string && data.paymentMethod.size() >= 2 && data.paymentMethod.size() <= 60 &&
+        data.paymentDate is string && data.paymentDate.size() >= 8 && data.paymentDate.size() <= 25 &&
+        isOptionalString(data, 'referenceNumber', 80) &&
+        isOptionalString(data, 'notes', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidSupplierPayment(data) {
+      return data.keys().hasAll(['purchaseOrderId', 'supplierId', 'amount', 'paymentMethod', 'paymentDate', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['purchaseOrderId', 'supplierId', 'amount', 'paymentMethod', 'paymentDate', 'referenceNumber', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidId(data.purchaseOrderId) &&
+        isValidId(data.supplierId) &&
+        (data.amount is int || data.amount is float) && data.amount >= 0 &&
+        data.paymentMethod is string && data.paymentMethod.size() >= 2 && data.paymentMethod.size() <= 60 &&
+        data.paymentDate is string && data.paymentDate.size() >= 8 && data.paymentDate.size() <= 25 &&
+        isOptionalString(data, 'referenceNumber', 80) &&
+        isOptionalString(data, 'notes', 500) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['category', 'description', 'amount', 'expenseDate', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['category', 'description', 'amount', 'expenseDate', 'createdAt', 'updatedAt']) &&
+        data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
+        data.description is string && data.description.size() >= 2 && data.description.size() <= 300 &&
+        (data.amount is int || data.amount is float) && data.amount >= 0 &&
+        data.expenseDate is string && data.expenseDate.size() >= 8 && data.expenseDate.size() <= 25 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidInspection(data) {
+      return data.keys().hasAll(['salesOrderId', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['salesOrderId', 'purchaseOrderId', 'status', 'inspectedBy', 'inspectionDate', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidId(data.salesOrderId) &&
+        (!('purchaseOrderId' in data) || isValidId(data.purchaseOrderId)) &&
+        data.status in ['PENDING', 'PASSED', 'REVISION_NEEDED'] &&
+        isOptionalString(data, 'inspectedBy', 120) &&
+        isOptionalString(data, 'inspectionDate', 25) &&
+        isOptionalString(data, 'notes', 1000) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidDelivery(data) {
+      return data.keys().hasAll(['salesOrderId', 'recipientName', 'address', 'scheduledDate', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['salesOrderId', 'recipientName', 'address', 'scheduledDate', 'status', 'courierName', 'trackingNumber', 'createdAt', 'updatedAt']) &&
+        isValidId(data.salesOrderId) &&
+        data.recipientName is string && data.recipientName.size() >= 2 && data.recipientName.size() <= 120 &&
+        data.address is string && data.address.size() >= 5 && data.address.size() <= 300 &&
+        data.scheduledDate is string && data.scheduledDate.size() >= 8 && data.scheduledDate.size() <= 25 &&
+        data.status in ['SCHEDULED', 'IN_TRANSIT', 'DELIVERED'] &&
+        isOptionalString(data, 'courierName', 100) &&
+        isOptionalString(data, 'trackingNumber', 100) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['actorUid', 'actorEmail', 'action', 'entityType', 'entityId', 'summary', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['actorUid', 'actorEmail', 'action', 'entityType', 'entityId', 'summary', 'createdAt', 'updatedAt']) &&
+        data.actorUid == request.auth.uid &&
+        data.actorEmail == request.auth.token.email &&
+        data.action is string && data.action.size() >= 2 && data.action.size() <= 120 &&
+        data.entityType is string && data.entityType.size() >= 2 && data.entityType.size() <= 60 &&
+        isValidId(data.entityId) &&
+        data.summary is string && data.summary.size() <= 500 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Match Rules
+    // -------------------------------------------------------------------------
+
+    // Connection health check
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Owner user accounts (strictly restricted to admins)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isAdmin() || (isVerifiedUser() && request.auth.uid == userId));
+      allow list: if isAdmin();
+      allow create: if isValidId(userId) && isAdmin() && isValidUserAccount(incoming()) && hasValidCreateTimestamps(incoming()) && incoming().uid == userId;
+      allow update: if isValidId(userId) && isAdmin() && isValidUserAccount(incoming()) && hasValidUpdateTimestamps(incoming()) && incoming().uid == existing().uid;
+      allow delete: if isValidId(userId) && isBootstrappedOwner();
+    }
+
+    // Business Settings: storefront is public-read; operations is admin-only
+    match /business_settings/{settingId} {
+      allow get: if isValidId(settingId) && (settingId == 'storefront' || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(settingId) && isAdmin() && hasValidCreateTimestamps(incoming()) && (
+        (settingId == 'storefront' && isValidStorefrontSettings(incoming())) ||
+        (settingId == 'operations' && isValidOperationsSettings(incoming()))
+      );
+      allow update: if isValidId(settingId) && isAdmin() && hasValidUpdateTimestamps(incoming()) && (
+        (settingId == 'storefront' && isValidStorefrontSettings(incoming())) ||
+        (settingId == 'operations' && isValidOperationsSettings(incoming()))
+      );
+      allow delete: if false;
+    }
+
+    // Catalog Categories: public can read active categories; admins manage all
+    match /catalog_categories/{categoryId} {
+      allow get: if isValidId(categoryId) && (existing().isActive == true || isAdmin());
+      allow list: if existing().isActive == true || isAdmin();
+      allow create: if isValidId(categoryId) && isAdmin() && isValidCatalogCategory(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(categoryId) && isAdmin() && isValidCatalogCategory(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    // Products: public can read published products; admins manage all
+    match /products/{productId} {
+      allow get: if isValidId(productId) && (existing().isPublished == true || isAdmin());
+      allow list: if existing().isPublished == true || isAdmin();
+      allow create: if isValidId(productId) && isAdmin() && isValidProduct(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(productId) && isAdmin() && isValidProduct(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    // Inquiries: public can blind-create NEW inquiries; only admins can read/update/delete
+    match /inquiries/{inquiryId} {
+      allow get: if isValidId(inquiryId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(inquiryId) &&
+        isValidInquiry(incoming()) &&
+        incoming().status == 'NEW' &&
+        hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(inquiryId) && isAdmin() && isValidInquiry(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(inquiryId) && isAdmin();
+    }
+
+    // Inquiry Items: public can blind-create items attached to an inquiry in the same batch/existing inquiry; only admins can read/update/delete
+    match /inquiry_items/{itemId} {
+      allow get: if isValidId(itemId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(itemId) &&
+        isValidInquiryItem(incoming()) &&
+        hasValidCreateTimestamps(incoming()) &&
+        existsAfter(/databases/$(database)/documents/inquiries/$(incoming().inquiryId));
+      allow update: if isValidId(itemId) && isAdmin() && isValidInquiryItem(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    // Private Business Operations Collections (Strictly Admin Only)
+    match /customers/{customerId} {
+      allow get: if isValidId(customerId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(customerId) && isAdmin() && isValidCustomer(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(customerId) && isAdmin() && isValidCustomer(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(customerId) && isAdmin();
+    }
+
+    match /suppliers/{supplierId} {
+      allow get: if isValidId(supplierId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(supplierId) && isAdmin() && isValidSupplier(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(supplierId) && isAdmin() && isValidSupplier(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(supplierId) && isAdmin();
+    }
+
+    match /supplier_products/{supplierProductId} {
+      allow get: if isValidId(supplierProductId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(supplierProductId) && isAdmin() && isValidSupplierProduct(incoming()) && hasValidCreateTimestamps(incoming()) &&
+        exists(/databases/$(database)/documents/suppliers/$(incoming().supplierId)) &&
+        exists(/databases/$(database)/documents/products/$(incoming().productId));
+      allow update: if isValidId(supplierProductId) && isAdmin() && isValidSupplierProduct(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(supplierProductId) && isAdmin();
+    }
+
+    match /quotations/{quotationId} {
+      allow get: if isValidId(quotationId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(quotationId) && isAdmin() && isValidQuotation(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(quotationId) && isAdmin() && isValidQuotation(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(quotationId) && isAdmin();
+    }
+
+    match /quotation_items/{itemId} {
+      allow get: if isValidId(itemId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(itemId) && isAdmin() && isValidQuotationItem(incoming()) && hasValidCreateTimestamps(incoming()) &&
+        existsAfter(/databases/$(database)/documents/quotations/$(incoming().quotationId));
+      allow update: if isValidId(itemId) && isAdmin() && isValidQuotationItem(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    match /sales_orders/{orderId} {
+      allow get: if isValidId(orderId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(orderId) && isAdmin() && isValidSalesOrder(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(orderId) && isAdmin() && isValidSalesOrder(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(orderId) && isAdmin();
+    }
+
+    match /sales_order_items/{itemId} {
+      allow get: if isValidId(itemId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(itemId) && isAdmin() && isValidSalesOrderItem(incoming()) && hasValidCreateTimestamps(incoming()) &&
+        existsAfter(/databases/$(database)/documents/sales_orders/$(incoming().salesOrderId));
+      allow update: if isValidId(itemId) && isAdmin() && isValidSalesOrderItem(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    match /purchase_orders/{poId} {
+      allow get: if isValidId(poId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(poId) && isAdmin() && isValidPurchaseOrder(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(poId) && isAdmin() && isValidPurchaseOrder(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(poId) && isAdmin();
+    }
+
+    match /purchase_order_items/{itemId} {
+      allow get: if isValidId(itemId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(itemId) && isAdmin() && isValidPurchaseOrderItem(incoming()) && hasValidCreateTimestamps(incoming()) &&
+        existsAfter(/databases/$(database)/documents/purchase_orders/$(incoming().purchaseOrderId));
+      allow update: if isValidId(itemId) && isAdmin() && isValidPurchaseOrderItem(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(itemId) && isAdmin();
+    }
+
+    match /customer_payments/{paymentId} {
+      allow get: if isValidId(paymentId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(paymentId) && isAdmin() && isValidCustomerPayment(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(paymentId) && isAdmin() && isValidCustomerPayment(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(paymentId) && isAdmin();
+    }
+
+    match /supplier_payments/{paymentId} {
+      allow get: if isValidId(paymentId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(paymentId) && isAdmin() && isValidSupplierPayment(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(paymentId) && isAdmin() && isValidSupplierPayment(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(paymentId) && isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow get: if isValidId(expenseId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(expenseId) && isAdmin() && isValidExpense(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(expenseId) && isAdmin() && isValidExpense(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(expenseId) && isAdmin();
+    }
+
+    match /inspections/{inspectionId} {
+      allow get: if isValidId(inspectionId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(inspectionId) && isAdmin() && isValidInspection(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(inspectionId) && isAdmin() && isValidInspection(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(inspectionId) && isAdmin();
+    }
+
+    match /deliveries/{deliveryId} {
+      allow get: if isValidId(deliveryId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(deliveryId) && isAdmin() && isValidDelivery(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if isValidId(deliveryId) && isAdmin() && isValidDelivery(incoming()) && hasValidUpdateTimestamps(incoming());
+      allow delete: if isValidId(deliveryId) && isAdmin();
+    }
+
+    match /activity_logs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isBootstrappedOwner() || isSecondaryOwner();
+      allow create: if isValidId(logId) && isAdmin() && isValidActivityLog(incoming()) && hasValidCreateTimestamps(incoming());
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

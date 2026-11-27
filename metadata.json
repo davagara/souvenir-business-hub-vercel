@@ -1,0 +1,8 @@
+{
+  "name": "Souvenir Business Hub",
+  "description": "Platform katalog digital terintegrasi dan manajemen operasional untuk bisnis souvenir kustom made-to-order.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

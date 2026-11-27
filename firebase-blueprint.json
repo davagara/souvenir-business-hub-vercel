@@ -1,0 +1,479 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Authorized business owner account metadata and role mapping.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 150 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["owner"] },
+        "isActive": { "type": "boolean" },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "isActive", "createdAt", "updatedAt"]
+    },
+    "StorefrontSettings": {
+      "title": "StorefrontSettings",
+      "description": "Publicly readable brand and contact settings for the storefront.",
+      "type": "object",
+      "properties": {
+        "businessName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 200 },
+        "logoUrl": { "type": "string", "maxLength": 500 },
+        "whatsappNumber": { "type": "string", "minLength": 8, "maxLength": 25 },
+        "instagramHandle": { "type": "string", "maxLength": 60 },
+        "address": { "type": "string", "maxLength": 300 },
+        "contactEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "contactHours": { "type": "string", "maxLength": 120 },
+        "defaultCurrency": { "type": "string", "enum": ["IDR"] },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["businessName", "whatsappNumber", "defaultCurrency", "createdAt", "updatedAt"]
+    },
+    "OperationsSettings": {
+      "title": "OperationsSettings",
+      "description": "Private admin operational settings including authorized owners and document formats.",
+      "type": "object",
+      "properties": {
+        "primaryOwnerEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "secondaryOwnerEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "defaultQuotationValidityDays": { "type": "integer" },
+        "inquiryNumberFormat": { "type": "string", "maxLength": 40 },
+        "quotationNumberFormat": { "type": "string", "maxLength": 40 },
+        "salesOrderNumberFormat": { "type": "string", "maxLength": 40 },
+        "purchaseOrderNumberFormat": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["primaryOwnerEmail", "defaultQuotationValidityDays", "inquiryNumberFormat", "quotationNumberFormat", "salesOrderNumberFormat", "purchaseOrderNumberFormat", "createdAt", "updatedAt"]
+    },
+    "CatalogCategory": {
+      "title": "CatalogCategory",
+      "description": "Public souvenir product category definition.",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[a-z0-9\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 300 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "sortOrder": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["slug", "name", "sortOrder", "isActive", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Public-facing custom souvenir product catalog item (no supplier pricing).",
+      "type": "object",
+      "properties": {
+        "productCode": { "type": "string", "minLength": 2, "maxLength": 40, "pattern": "^[A-Z0-9\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "photos": { "type": "array" },
+        "description": { "type": "string", "maxLength": 2000 },
+        "specifications": { "type": "string", "maxLength": 1000 },
+        "availableColors": { "type": "array" },
+        "availableSizes": { "type": "array" },
+        "customizationOptions": { "type": "array" },
+        "minimumOrderQty": { "type": "integer" },
+        "startingPrice": { "type": "number" },
+        "estimatedLeadTimeDays": { "type": "integer" },
+        "isFeatured": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productCode", "name", "categoryId", "categoryName", "photos", "description", "minimumOrderQty", "startingPrice", "estimatedLeadTimeDays", "isFeatured", "isPublished", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Private customer contact and order history profile.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "whatsappNumber": { "type": "string", "minLength": 8, "maxLength": 25 },
+        "email": { "type": "string", "format": "email", "maxLength": 150 },
+        "companyOrEventName": { "type": "string", "maxLength": 150 },
+        "city": { "type": "string", "maxLength": 80 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "whatsappNumber", "createdAt", "updatedAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Private external supplier and printing partner directory.",
+      "type": "object",
+      "properties": {
+        "supplierCode": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "contactPerson": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "minLength": 6, "maxLength": 25 },
+        "city": { "type": "string", "maxLength": 80 },
+        "specialty": { "type": "string", "maxLength": 200 },
+        "isActive": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplierCode", "name", "phone", "isActive", "createdAt", "updatedAt"]
+    },
+    "SupplierProduct": {
+      "title": "SupplierProduct",
+      "description": "Private supplier pricing and lead time mapping per product.",
+      "type": "object",
+      "properties": {
+        "supplierId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "supplierSku": { "type": "string", "maxLength": 60 },
+        "baseCostPrice": { "type": "number" },
+        "printingCostPerUnit": { "type": "number" },
+        "minOrderQty": { "type": "integer" },
+        "leadTimeDays": { "type": "integer" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplierId", "productId", "baseCostPrice", "minOrderQty", "leadTimeDays", "createdAt", "updatedAt"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Customer product inquiry submission.",
+      "type": "object",
+      "properties": {
+        "inquiryNumber": { "type": "string", "minLength": 5, "maxLength": 40, "pattern": "^[A-Z0-9\\-]+$" },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "whatsappNumber": { "type": "string", "minLength": 8, "maxLength": 25 },
+        "eventType": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "eventDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "notes": { "type": "string", "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["NEW", "REVIEWED", "QUOTED", "CONVERTED", "CLOSED"] },
+        "itemCount": { "type": "integer" },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["inquiryNumber", "customerName", "whatsappNumber", "eventType", "eventDate", "status", "itemCount", "createdAt", "updatedAt"]
+    },
+    "InquiryItem": {
+      "title": "InquiryItem",
+      "description": "Line item belonging to a customer inquiry.",
+      "type": "object",
+      "properties": {
+        "inquiryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productCode": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "quantity": { "type": "integer" },
+        "selectedColor": { "type": "string", "maxLength": 60 },
+        "selectedSize": { "type": "string", "maxLength": 60 },
+        "customizationDetails": { "type": "string", "maxLength": 1000 },
+        "artworkReferenceUrl": { "type": "string", "maxLength": 500 },
+        "indicativeUnitPrice": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["inquiryId", "productId", "productCode", "productName", "quantity", "indicativeUnitPrice", "createdAt", "updatedAt"]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Formal price quotation sent to a customer.",
+      "type": "object",
+      "properties": {
+        "quotationNumber": { "type": "string", "minLength": 5, "maxLength": 40 },
+        "inquiryId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["DRAFT", "SENT", "APPROVED", "REJECTED", "EXPIRED"] },
+        "validUntil": { "type": "string", "maxLength": 25 },
+        "subtotal": { "type": "number" },
+        "discountAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["quotationNumber", "customerId", "customerName", "status", "validUntil", "subtotal", "totalAmount", "createdAt", "updatedAt"]
+    },
+    "QuotationItem": {
+      "title": "QuotationItem",
+      "description": "Line item inside a quotation preserving historical quoted price.",
+      "type": "object",
+      "properties": {
+        "quotationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "quantity": { "type": "integer" },
+        "unitPrice": { "type": "number" },
+        "lineTotal": { "type": "number" },
+        "customizationSummary": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["quotationId", "productId", "productName", "quantity", "unitPrice", "lineTotal", "createdAt", "updatedAt"]
+    },
+    "SalesOrder": {
+      "title": "SalesOrder",
+      "description": "Confirmed customer sales order.",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "minLength": 5, "maxLength": 40 },
+        "quotationId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "eventDate": { "type": "string", "maxLength": 25 },
+        "deliveryDeadline": { "type": "string", "maxLength": 25 },
+        "status": { "type": "string", "enum": ["CONFIRMED", "IN_PRODUCTION", "QC_PENDING", "READY_TO_SHIP", "DELIVERED", "CANCELLED"] },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 1500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderNumber", "customerId", "customerName", "status", "totalAmount", "paidAmount", "createdAt", "updatedAt"]
+    },
+    "SalesOrderItem": {
+      "title": "SalesOrderItem",
+      "description": "Line item for a sales order preserving historical selling price.",
+      "type": "object",
+      "properties": {
+        "salesOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "quantity": { "type": "integer" },
+        "unitSellingPrice": { "type": "number" },
+        "lineTotal": { "type": "number" },
+        "customizationSummary": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["salesOrderId", "productId", "productName", "quantity", "unitSellingPrice", "lineTotal", "createdAt", "updatedAt"]
+    },
+    "PurchaseOrder": {
+      "title": "PurchaseOrder",
+      "description": "Supplier purchase order for made-to-order fulfillment.",
+      "type": "object",
+      "properties": {
+        "poNumber": { "type": "string", "minLength": 5, "maxLength": 40 },
+        "salesOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "supplierId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "supplierName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "status": { "type": "string", "enum": ["DRAFT", "ORDERED", "IN_PRODUCTION", "COMPLETED", "CANCELLED"] },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "expectedCompletionDate": { "type": "string", "maxLength": 25 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["poNumber", "salesOrderId", "supplierId", "supplierName", "status", "totalAmount", "paidAmount", "createdAt", "updatedAt"]
+    },
+    "PurchaseOrderItem": {
+      "title": "PurchaseOrderItem",
+      "description": "Line item for a purchase order preserving historical purchase price.",
+      "type": "object",
+      "properties": {
+        "purchaseOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "quantity": { "type": "integer" },
+        "unitPurchasePrice": { "type": "number" },
+        "lineTotal": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["purchaseOrderId", "productId", "productName", "quantity", "unitPurchasePrice", "lineTotal", "createdAt", "updatedAt"]
+    },
+    "CustomerPayment": {
+      "title": "CustomerPayment",
+      "description": "Recorded payment from a customer against a sales order.",
+      "type": "object",
+      "properties": {
+        "salesOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 60 },
+        "paymentDate": { "type": "string", "maxLength": 25 },
+        "referenceNumber": { "type": "string", "maxLength": 80 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["salesOrderId", "customerId", "amount", "paymentMethod", "paymentDate", "createdAt", "updatedAt"]
+    },
+    "SupplierPayment": {
+      "title": "SupplierPayment",
+      "description": "Recorded payment to a supplier against a purchase order.",
+      "type": "object",
+      "properties": {
+        "purchaseOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "supplierId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 60 },
+        "paymentDate": { "type": "string", "maxLength": 25 },
+        "referenceNumber": { "type": "string", "maxLength": 80 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["purchaseOrderId", "supplierId", "amount", "paymentMethod", "paymentDate", "createdAt", "updatedAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Operational business expense record.",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "description": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "amount": { "type": "number" },
+        "expenseDate": { "type": "string", "maxLength": 25 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["category", "description", "amount", "expenseDate", "createdAt", "updatedAt"]
+    },
+    "Inspection": {
+      "title": "Inspection",
+      "description": "Quality control inspection record for a sales or purchase order.",
+      "type": "object",
+      "properties": {
+        "salesOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "purchaseOrderId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["PENDING", "PASSED", "REVISION_NEEDED"] },
+        "inspectedBy": { "type": "string", "maxLength": 120 },
+        "inspectionDate": { "type": "string", "maxLength": 25 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["salesOrderId", "status", "createdAt", "updatedAt"]
+    },
+    "Delivery": {
+      "title": "Delivery",
+      "description": "Outbound delivery schedule and tracking record.",
+      "type": "object",
+      "properties": {
+        "salesOrderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "recipientName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "address": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "scheduledDate": { "type": "string", "maxLength": 25 },
+        "status": { "type": "string", "enum": ["SCHEDULED", "IN_TRANSIT", "DELIVERED"] },
+        "courierName": { "type": "string", "maxLength": 100 },
+        "trackingNumber": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["salesOrderId", "recipientName", "address", "scheduledDate", "status", "createdAt", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit log of business owner administrative actions.",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "actorEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "action": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "entityType": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "summary": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "actorEmail", "action", "entityType", "entityId", "summary", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Authorized business owner accounts."
+    },
+    "/business_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/StorefrontSettings" },
+      "description": "Storefront (public) and operations (admin-only) business settings."
+    },
+    "/catalog_categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/CatalogCategory" },
+      "description": "Product categories."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Custom souvenir products."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Private customer records."
+    },
+    "/suppliers/{supplierId}": {
+      "schema": { "$ref": "#/entities/Supplier" },
+      "description": "Private supplier records."
+    },
+    "/supplier_products/{supplierProductId}": {
+      "schema": { "$ref": "#/entities/SupplierProduct" },
+      "description": "Private supplier product cost and lead time mappings."
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "Customer product inquiries."
+    },
+    "/inquiry_items/{itemId}": {
+      "schema": { "$ref": "#/entities/InquiryItem" },
+      "description": "Items associated with customer inquiries."
+    },
+    "/quotations/{quotationId}": {
+      "schema": { "$ref": "#/entities/Quotation" },
+      "description": "Customer quotations."
+    },
+    "/quotation_items/{itemId}": {
+      "schema": { "$ref": "#/entities/QuotationItem" },
+      "description": "Quotation line items."
+    },
+    "/sales_orders/{orderId}": {
+      "schema": { "$ref": "#/entities/SalesOrder" },
+      "description": "Confirmed customer sales orders."
+    },
+    "/sales_order_items/{itemId}": {
+      "schema": { "$ref": "#/entities/SalesOrderItem" },
+      "description": "Sales order line items."
+    },
+    "/purchase_orders/{poId}": {
+      "schema": { "$ref": "#/entities/PurchaseOrder" },
+      "description": "Supplier purchase orders."
+    },
+    "/purchase_order_items/{itemId}": {
+      "schema": { "$ref": "#/entities/PurchaseOrderItem" },
+      "description": "Purchase order line items."
+    },
+    "/customer_payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/CustomerPayment" },
+      "description": "Customer payment records."
+    },
+    "/supplier_payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/SupplierPayment" },
+      "description": "Supplier payment records."
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Business expense records."
+    },
+    "/inspections/{inspectionId}": {
+      "schema": { "$ref": "#/entities/Inspection" },
+      "description": "Quality inspection records."
+    },
+    "/deliveries/{deliveryId}": {
+      "schema": { "$ref": "#/entities/Delivery" },
+      "description": "Delivery tracking records."
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Admin activity logs."
+    }
+  }
+}
