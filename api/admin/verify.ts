@@ -1,7 +1,8 @@
 // Vercel Serverless Function: POST /api/admin/verify
 // Verifikasi Firebase ID token untuk portal admin.
-import { getApp, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+// Memakai Firebase Auth REST API (accounts:lookup) sehingga tidak butuh
+// firebase-admin / service account. Token hanya valid jika diterbitkan
+// oleh project Firebase milik API key di bawah.
 
 interface Req {
   method?: string;
@@ -13,8 +14,10 @@ interface Res {
   setHeader(name: string, value: string): void;
 }
 
-// Project ID Firebase. Bisa di-override lewat env var FIREBASE_PROJECT_ID.
-const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'neon-ripsaw-c8p5g';
+// API key web Firebase (publik, sama dengan di firebase-applet-config.json).
+// Bisa di-override lewat env var FIREBASE_API_KEY.
+const FIREBASE_API_KEY =
+  process.env.FIREBASE_API_KEY || 'AIzaSyBKZPyOQ8aFqK_7DhVi-ovvRf4iP2hzhPA';
 
 // Email pemilik yang berwenang. Bisa di-override lewat env var OWNER_EMAILS
 // (pisahkan dengan koma). Email pertama dianggap primary owner.
@@ -25,6 +28,12 @@ const OWNER_EMAILS = (process.env.OWNER_EMAILS
 )
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
+
+interface LookupUser {
+  localId?: string;
+  email?: string;
+  emailVerified?: boolean;
+}
 
 export default async function handler(req: Req, res: Res): Promise<void> {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -49,20 +58,32 @@ export default async function handler(req: Req, res: Res): Promise<void> {
   }
 
   try {
-    if (getApps().length === 0) {
-      initializeApp({ projectId: FIREBASE_PROJECT_ID });
+    const lookup = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(FIREBASE_API_KEY)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+
+    if (!lookup.ok) {
+      res.status(401).json({ authorized: false, error: 'Sesi login tidak valid atau kedaluwarsa.' });
+      return;
     }
-    const decoded = await getAuth(getApp()).verifyIdToken(idToken);
-    if (!decoded.email || decoded.email_verified !== true) {
+
+    const data = (await lookup.json()) as { users?: LookupUser[] };
+    const user = data.users?.[0];
+    if (!user || !user.email || user.emailVerified !== true) {
       res.status(403).json({ authorized: false, error: 'Email akun harus terverifikasi.' });
       return;
     }
 
-    const emailLower = decoded.email.toLowerCase();
+    const emailLower = user.email.toLowerCase();
     res.status(200).json({
       authorized: OWNER_EMAILS.includes(emailLower),
-      uid: decoded.uid,
-      email: decoded.email,
+      uid: user.localId,
+      email: user.email,
       emailVerified: true,
       isPrimaryOwner: emailLower === OWNER_EMAILS[0],
     });
